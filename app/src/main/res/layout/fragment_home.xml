@@ -5,12 +5,13 @@
     android:id="@+id/home_view"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+	android:background="@android:color/white"
     tools:context=".ui.home.HomeFragment">
 
     <TextView
         android:id="@+id/text_home"
-        android:layout_width="411dp"
-        android:layout_height="190dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:layout_marginStart="8dp"
         android:layout_marginTop="8dp"
         android:layout_marginEnd="8dp"
@@ -19,32 +20,38 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.527" />
+        app:layout_constraintTop_toTopOf="parent" />
 
     <TextView
         android:id="@+id/textView"
-        android:layout_width="386dp"
-        android:layout_height="67dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:text="TextView"
         tools:layout_editor_absoluteX="16dp"
         tools:layout_editor_absoluteY="509dp" />
 
     <EditText
         android:id="@+id/newsText"
-        android:layout_width="387dp"
-        android:layout_height="109dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:ems="10"
         android:inputType="text"
         android:text=" Some text"
-        tools:layout_editor_absoluteX="8dp"
+        android:visibility="visible"
+        tools:layout_editor_absoluteX="16dp"
         tools:layout_editor_absoluteY="154dp" />
 
     <Button
         android:id="@+id/fetchLatestNews"
-        android:layout_width="237dp"
+        android:layout_width="wrap_content"
         android:layout_height="52dp"
+        android:layout_marginTop="165dp"
+        android:layout_marginEnd="124dp"
+        android:layout_marginBottom="93dp"
         android:text="Fetch Latest News"
-        tools:layout_editor_absoluteX="87dp"
-        tools:layout_editor_absoluteY="86dp" />
+        android:visibility="visible"
+        app:layout_constraintBottom_toTopOf="@+id/textView"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/newsText"
+        app:layout_constraintVertical_bias="0.0" />
 </androidx.constraintlayout.widget.ConstraintLayout>

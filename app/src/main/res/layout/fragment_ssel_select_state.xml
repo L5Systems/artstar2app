@@ -4,18 +4,20 @@
     android:id="@+id/fragment_ssel_select_state"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:visibility="visible"
+    android:background="@android:color/white"
     tools:context=".ui.statedialogs.VesselSelectStateFrag">
-
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:text="Hello" />
 
     <Button
         android:id="@+id/vessel_select_button"
-        android:layout_width="371dp"
-        android:layout_height="151dp"
-        android:insetTop="100dp"
+        android:layout_width="wrap_content"
+        android:layout_height="69dp"
         android:text="This is a state view!!!" />
+
+    <Button
+        android:id="@+id/button"
+        android:layout_width="match_parent"
+        android:layout_height="18dp"
+        android:text="Button" />
 
 </FrameLayout>

@@ -52,7 +52,7 @@ class HomeFragment : Fragment() {
         val root: View = binding.root
         val navView: Any = findFragmentById(R.id.home_view) // If you have a BottomNavigationView
 
-        val textView: TextView = binding.textHome
+        val textView: TextView = binding.newsText
         homeViewModel.text.observe(viewLifecycleOwner) {
             textView.text = it
         }
