@@ -13,7 +13,7 @@ import androidx.navigation.ui.setupWithNavController
 import com.example.artest2.databinding.ActivityMainBinding
 
 // Import your MainViewModel
-import com.example.artest2.ui.MainViewModel // Adjust import path if needed
+import com.example.artest2.MainViewModel // Adjust import path if needed
 
 class MainActivity : AppCompatActivity() {
 
