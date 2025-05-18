@@ -16,7 +16,7 @@ class SampleTransaction(
     // Companion object is where static-like members go in Kotlin
     companion object {
         // Unique identifier for this type of transaction
-        const val TRANSACTION_TYPE = "SAMPLE_BUNKERING_PROCESS" // Or your chosen type string
+        const val TRANSACTION_TYPE = "SampleTransaction" // Or your chosen type string
 
         /**
          * Factory method to create instances of SampleTransaction.
@@ -42,32 +42,40 @@ class SampleTransaction(
 
     // --- Define states for SampleTransaction ---
     // Example states (replace with your actual states)
-    private val stateScanVesselQR = StateNode(
-        key = "SCAN_VESSEL_QR",
-        label = "Scan Vessel QR Code",
-        handlerStateName = "QrScanState" // Name of the StateBase class that handles this
+    private val vesselSelectionState = StateNode(
+        key = "VesselSelectionState",
+        label = "Select Vessel",
+        handlerStateName = "VesselSelectionState" // Name of the StateBase class that handles this
     )
 
-    private val stateEnterDetails = StateNode(
-        key = "ENTER_BUNKER_DETAILS",
-        label = "Enter Bunker Details",
-        handlerStateName = "BunkerDetailsInputState"
+    private val exampleDataFetchingState = StateNode(
+        key = "ExampleDataFetchingState",
+        label = "Enter Fixture Details",
+        handlerStateName = "ExampleDataFetchingState"
     )
 
-    private val stateConfirmation = StateNode(
-        key = "CONFIRM_DETAILS",
+    private val exampleProcessingState = StateNode(
+        key = "ExampleProcessingState",
+        label = "Display Fixture Dialog",
+        handlerStateName = "ExampleProcessingState"
+    )
+
+    private val exampleCommitState = StateNode(
+        key = "ExampleCommitState",
         label = "Confirm Details",
-        handlerStateName = "ConfirmationState"
+        handlerStateName = "ExampleCommitState"
     )
+
     // --- End of state definitions ---
 
 
     override fun getStateEntries(): List<StateNode> {
         // Define the sequence of states for this transaction
         return listOf(
-            stateScanVesselQR,
-            stateEnterDetails,
-            stateConfirmation
+            vesselSelectionState,
+            exampleDataFetchingState,
+            exampleProcessingState,
+            exampleCommitState
             // Add more states as needed
         )
     }

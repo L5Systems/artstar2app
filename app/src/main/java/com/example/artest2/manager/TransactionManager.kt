@@ -285,17 +285,19 @@ class TransactionManager(
             // Set as the active transaction
             activeTransaction = newTransactionInstance
             activeTransactionId = newTransactionInstance.transactionID // Assuming BaseTransaction.transactionID is the Long ID
+            // !!! CRITICAL: Populate states for the new transaction !!!
+            initializeStatesForTransaction(newTransactionInstance) // Call a new helper method
 
             // Update the global status
             _currentTransStatus.value = TransStatus(
                 selectedTransactionId = newTransactionInstance.transactionID, // This should be the Long ID
                 selectedTransactionName = newTransactionInstance.transactionName,
                 transactionStatus = "active_pending_start", // Or whatever initial status is appropriate
-               //currentStepName = newTransactionInstance.getStateEntries().firstOrNull()?.label ?: "Initial Step",
-                //totalSteps = newTransactionInstance.getStateEntries().size,
-                //currentStepNumber = if (newTransactionInstance.getStateEntries().isNotEmpty()) 1 else 0,
-                //isFirstStep = true,
-                //isLastStep = newTransactionInstance.getStateEntries().size <= 1
+                currentStepName = newTransactionInstance.getStateEntries().firstOrNull()?.label ?: "Initial Step",
+                totalSteps = newTransactionInstance.getStateEntries().size,
+                currentStepNumber = if (newTransactionInstance.getStateEntries().isNotEmpty()) 1 else 0,
+                isFirstStep = true,
+                isLastStep = newTransactionInstance.getStateEntries().size <= 1
             )
             // Optionally, also save this initial status to the transaction instance itself
             newTransactionInstance.transactionStatus = _currentTransStatus.value.copy()
@@ -546,5 +548,56 @@ class TransactionManager(
     // Function to emit a UI action
     suspend fun emitUiAction(action: UiAction) {
         _uiActions.emit(action)
+    }
+
+    /**
+     * Initializes the states for a given transaction based on its definition.
+     * This is where states are actually instantiated and added to transaction.states.
+     */
+    private fun initializeStatesForTransaction(transaction: BaseTransaction) {
+        transaction.states.clear() // Clear any previous states if re-initializing
+        val stateEntries = transaction.getStateEntries() // This comes from SampleTransaction etc.
+
+        if (stateEntries.isEmpty()) {
+            Log.w("TransactionManager", "Transaction '${transaction.getName()}' has no state entries defined.")
+            return
+        }
+
+        Log.d("TransactionManager", "Initializing ${stateEntries.size} states for transaction '${transaction.getName()}':")
+        for (stateNode in stateEntries) {
+            val stateInstance = createStateByName(stateNode.handlerStateName, transaction)
+            if (stateInstance != null) {
+                transaction.states.add(stateInstance) // <<< THE CRITICAL ADDITION
+                Log.d("TransactionManager", "  Added state: ${stateInstance.getName()} (handler: ${stateNode.handlerStateName})")
+            } else {
+                Log.e("TransactionManager", "  Failed to create state instance for handler: ${stateNode.handlerStateName}")
+                // Potentially stop transaction initialization or mark as invalid
+            }
+        }
+
+        // Optionally set the first state as the current state if the transaction should start immediately
+        if (transaction.states.isNotEmpty()) {
+            transaction.currentState = transaction.states.first()
+            Log.i("TransactionManager", "Set initial state for '${transaction.getName()}' to '${transaction.currentState?.getName()}'")
+        }
+    }
+
+    /**
+     * Creates a StateBase instance based on its registered name.
+     * (You might have a similar method already, ensure it's used by initializeStatesForTransaction)
+     */
+    fun createStateByName(stateName: String, transaction: BaseTransaction): StateBase? {
+        // This should be your central place for creating state instances.
+        // You might have a map of state names to
+        return when (stateName) {
+            "ExampleDataFetchingState" -> ExampleDataFetchingState(transaction)
+            "ExampleProcessingState" -> ExampleProcessingState(transaction)
+            "ExampleCommitState" -> ExampleCommitState(transaction)
+            "VesselSelectionState" -> com.example.artest2.states.VesselSelectionState(transaction)
+            else -> {
+                Log.e("TransactionManager", "Unknown state name provided for creation: $stateName")
+                null
+            }
+        }
     }
 }
