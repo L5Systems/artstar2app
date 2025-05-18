@@ -1,56 +1,313 @@
 package com.example.artest2.manager
 
 import android.app.Activity
-import android.content.Context
-import android.content.Intent
-import com.example.artest2.core.BaseTransaction
-import com.example.artest2.core.StateBase
-import com.example.artest2.core.StateNode
-import com.example.artest2.core.TransStatus
 import com.example.artest2.states.ExampleCommitState
 import com.example.artest2.states.ExampleDataFetchingState
 import com.example.artest2.states.ExampleProcessingState
-import com.example.artest2.transactions.SampleTransaction
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlin.random.Random
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import android.app.Application
+import android.content.Intent
+import android.util.Log
+import androidx.fragment.app.Fragment
+import com.example.artest2.DialogManager
+import com.example.artest2.core.BaseTransaction
+import com.example.artest2.core.StateBase
+import com.example.artest2.core.StateNode
+import com.example.artest2.core.TransStatus
+// ... other imports
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 
-class TransactionManager {
-    private val transactionPrototypes: MutableMap<String, (Long, String) -> BaseTransaction> = mutableMapOf()
-    private val openTransactions: MutableList<BaseTransaction> = mutableListOf()
+class TransactionManager(
+    private val application: Application,
+    private val externalScope: CoroutineScope // Scope from ViewModel or Application
+) {
+    private val transactionFactory: TransactionFactory = TransactionFactory(application) // Initialize factory
+    private var transactionPrototypes: MutableMap<String, (Long, String) -> BaseTransaction> =
+        mutableMapOf()
 
-    private val _currentTransStatus = MutableStateFlow(TransStatus())
+    private var openTransactions: MutableList<BaseTransaction> = mutableListOf()
+    var fragment: Fragment? = null
+    private var activeTransactionId: Long = -1
+    private val transactions = mutableMapOf<String, BaseTransaction>()
+
+    // --- UI Action Emitter (for DashboardFragment/Activity to observe) ---
+    private var _currentTransStatus = MutableStateFlow(TransStatus()) // Your existing status flow
     val currentTransStatus: StateFlow<TransStatus> = _currentTransStatus.asStateFlow()
 
-    private var activeTransactionId: Long = -1
+    private val transactionMutex = Mutex()
+    private var currentTransactionJob: Job? = null
 
-    init {
-        // Register transaction prototypes
-        transactionPrototypes[SampleTransaction.TRANSACTION_TYPE] =
-            { id, type -> SampleTransaction(id, type) }
+    // --- UI Action Emitter (for DashboardFragment/Activity to observe) ---
+    // Assuming you have this from previous discussions
 
-        // Create a default transaction or load initial state if necessary
-        // createNewTransaction(SampleTransaction.TRANSACTION_TYPE)
+
+
+    // --- For managing results from UI interactions ---
+    // Key: requestId, Value: CompletableDeferred waiting for the UI result
+
+    private var activeTransaction: BaseTransaction? = null
+     //************************************************************************************
+    // Data class for states to describe the UI input they need.
+    // This is passed by the State to the TransactionManager.
+    // It does NOT contain internal TM details like requestId or the final onResult.
+    //************************************************************************************
+    data class InputScreenConfig(
+        val dialogType: DialogManager.DialogType, // What kind of input/dialog is it?
+        val title: String,                        // Generic title for the screen/dialog
+        val message: String? = null,              // Optional message/prompt
+        val positiveButtonText: String? = "Confirm",
+        val negativeButtonText: String? = "Cancel",
+        val neutralButtonText: String? = null,    // If applicable
+        val inputHint: String? = null,            // For dialogs/screens that need text input
+        val items: List<String>? = null,          // For dialogs/screens that show a list/spinner
+        val initialSelection: String? = null,     // For pre-selecting an item in a list/spinner
+        val customData: Map<String, Any> = emptyMap() // For any other specific data the UI might need
+        // NO requestId, NO onResult callback here. TM handles those.
+    )
+    //************************************************************************************
+
+    // Sealed class representing actions the UI (DashboardFragment/Activity) should perform.
+    // This is emitted by TransactionManager and collected by the UI layer.
+    sealed class UiAction {
+        data class RequestInputScreen(
+            val requestId: String, // Generated by TransactionManager
+            val transactionId: String, // ID of the transaction requesting this
+            // Fields from InputScreenConfig are copied here by TransactionManager
+            val dialogType: DialogManager.DialogType,
+            val title: String,
+            val message: String?,
+            val positiveButtonText: String?,
+            val negativeButtonText: String?,
+            val neutralButtonText: String?,
+            val inputHint: String?,
+            val items: List<String>?,
+            val initialSelection: String?,
+            val customData: Map<String, Any>,
+            // This onResult is the TransactionManager's internal callback mechanism
+            // that the UI layer (e.g., DashboardFragment) will invoke with the data.
+            val onResult: (resultData: Map<String, Any>?) -> Unit
+        ) : UiAction()
+
+        // Example: Action to show a simple non-interactive message
+        data class ShowMessage(
+            val title: String,
+            val message: String,
+            val positiveButtonText: String = "OK"
+        ) : UiAction()
+
+        data class ShowDialogActivity(
+            val requestId: String, // Generated by TransactionManager
+            val stateName: String, // This will be our requestId
+            val transactionId: String,
+            val dialogType: DialogManager.DialogType,
+            val dialogData: Map<String, Any> = emptyMap(),
+            // This callback is now for the UI to invoke with the dialog's result.
+            // The TransactionManager will use stateName (requestId) to complete the right deferred.
+            val callback: (resultData: Map<String, Any>?) -> Unit,
+            val onResult: (resultData: Map<String, Any>?) -> Unit
+        ) : UiAction()
+        // DialogResult might become less necessary if the callback handles it, or it's used for other scenarios.
+        data class DialogResult(val stateName: String, val data: Map<String, Any>?) : UiAction()
+
+        data class UpdateTransactionStatus(val status: TransStatus) : UiAction()
+        // Add other UI actions as needed (e.g., NavigateTo, ShowLoading, HideLoading)
+
+
     }
 
-    private fun getRandomId(): Long = Random.nextLong(1000, 100000)
 
-    fun createNewTransaction(tranType: String): BaseTransaction? {
-        val id = getRandomId()
-        val transactionConstructor = transactionPrototypes[tranType]
-        val newTransaction = transactionConstructor?.invoke(id, tranType)
-
-        return newTransaction?.also {
-            openTransactions.add(it)
-            setActiveTransaction(it.transactionID)
-            println("TransactionManager: Created new transaction ${it.transactionName} with ID ${it.transactionID}")
-        } ?: run {
-            println("Error: Unknown transaction type name provided: $tranType")
-            null
+    suspend fun startTransaction(
+        transaction: BaseTransaction,
+        initialContext: Map<String, Any> = emptyMap()
+    ) {
+        transactionMutex.withLock {
+            if (currentTransactionJob?.isActive == true) {
+                Log.w(
+                    "TransactionManager",
+                    "Another transaction is already active. Cannot start new one yet."
+                )
+                // Optionally, you could queue transactions or cancel the existing one.
+                return
+            }
+            transactions[transaction.getTransactionID()] = transaction
+            activeTransaction = transaction
+            _uiActions.emit(UiAction.UpdateTransactionStatus(transaction.transactionStatus))
+            Log.i("TransactionManager", "Starting transaction: ${transaction.transactionID}")
         }
+
+        currentTransactionJob =
+            externalScope.launch(Dispatchers.Default) { // Use a background dispatcher
+                try {
+                    //transaction.executeTransaction(initialContext)
+                    transactionMutex.withLock {
+                        Log.i(
+                            "TransactionManager",
+                            "Transaction ${transaction.transactionID} completed successfully."
+                        )
+                        _uiActions.emit(UiAction.UpdateTransactionStatus(transaction.transactionStatus))
+                        if (activeTransaction == transaction) activeTransaction = null
+                    }
+                } catch (e: Exception) {
+                    transactionMutex.withLock {
+                        Log.e(
+                            "TransactionManager",
+                            "Transaction ${transaction.transactionID} failed: ${e.message}",
+                            e
+                        )
+                        //transaction.transactionStatus = TransStatus.transactionStatus // Ensure status is updated
+                        _uiActions.emit(UiAction.UpdateTransactionStatus(transaction.transactionStatus))
+                        if (activeTransaction == transaction) activeTransaction = null
+                    }
+                    // Optionally, rethrow or handle specific exceptions
+                } finally {
+                    transactionMutex.withLock {
+                        if (activeTransaction == transaction) {
+                            activeTransaction = null
+                            Log.d(
+                                "TransactionManager",
+                                "Cleared active transaction: ${transaction.transactionID}"
+                            )
+                        }
+                    }
+                }
+            }
+    }
+
+    /**
+     * Called by a State to request a generic input screen from the UI.
+     * This function will suspend until the UI provides a result.
+     */
+    suspend fun requestInputScreen(
+        config: InputScreenConfig,
+        currentFragment: Fragment // For NavController context if needed by UI layer
+    ): Map<String, Any>? {
+        val tx = activeTransaction ?: run {
+            Log.e("TransactionManager", "requestInputScreen called with no active transaction.")
+            return null // Or throw exception
+        }
+
+        val requestId = "uiReq_${tx.transactionID}_${nextRequestId++}"
+        val deferredResult = CompletableDeferred<Map<String, Any>?>()
+        activeDialogRequests[requestId] = deferredResult
+
+        val actionToEmit = UiAction.RequestInputScreen(
+            requestId = requestId,
+            transactionId = tx.getTransactionID(),
+            dialogType = config.dialogType,
+            title = config.title,
+            message = config.message,
+            positiveButtonText = config.positiveButtonText,
+            negativeButtonText = config.negativeButtonText,
+            neutralButtonText = config.neutralButtonText,
+            inputHint = config.inputHint,
+            items = config.items,
+            initialSelection = config.initialSelection,
+            customData = config.customData,
+            onResult = { resultDataMap ->
+                // This lambda is what DashboardFragment will call.
+                // It, in turn, calls completeUiRequest.
+                completeUiRequest(requestId, resultDataMap)
+            }
+        )
+
+        _uiActions.emit(actionToEmit)
+        Log.d(
+            "TransactionManager",
+            "Emitted RequestInputScreen for type ${actionToEmit.dialogType} with requestId $requestId"
+        )
+
+        return deferredResult.await() // Suspend until UI result is provided
+    }
+
+    /**
+     * Called by the UI layer (e.g., DashboardFragment via the onResult callback)
+     * to provide the result of a UI interaction.
+     */
+    fun completeUiRequest(requestId: String, data: Map<String, Any>?) {
+        Log.d("TransactionManager", "Completing UI request for ID: $requestId, Data: $data")
+        val deferred = activeDialogRequests.remove(requestId)
+        if (deferred != null) {
+            if (!deferred.isCompleted) {
+                deferred.complete(data)
+            } else {
+                Log.w("TransactionManager", "Deferred for $requestId was already completed.")
+            }
+        } else {
+            Log.w("TransactionManager", "No active dialog request found for ID: $requestId")
+        }
+    }
+
+
+    fun getTransaction(transactionID: String): BaseTransaction? {
+        return transactions[transactionID]
+    }
+
+    fun getActiveTransaction(): BaseTransaction? {
+        return activeTransaction
+    }
+
+    // ... other TransactionManager methods ...
+
+    private fun getRandomId(): Long = Random.nextLong(1000, 100000)
+    suspend fun addTransactionPrototype(transactionType: String, transactionConstructor: (Long, String) -> BaseTransaction) {
+
+        transactionPrototypes[transactionType] = transactionConstructor
+    }
+
+    /**
+     * Creates a new transaction using the factory, makes it the active transaction,
+     * and updates the global transaction status.
+     */
+    fun createNewTransaction(transactionType: String): BaseTransaction? {
+        Log.d("TransactionManager", "Attempting to create new transaction of type: $transactionType")
+        // The factory now returns a BaseTransaction which includes its ID (Long) and name
+        val newTransactionInstance = transactionFactory.createTransaction(transactionType, this)
+
+        if (newTransactionInstance != null) {
+            // Use the String ID from BaseTransaction's getTransactionID() for the map key
+            val transactionStringId = newTransactionInstance.getTransactionID()
+            transactions[transactionStringId] = newTransactionInstance // Add to the map
+
+            // Also add to openTransactions list if you use it for other purposes
+            openTransactions.add(newTransactionInstance)
+
+            // Set as the active transaction
+            activeTransaction = newTransactionInstance
+            activeTransactionId = newTransactionInstance.transactionID // Assuming BaseTransaction.transactionID is the Long ID
+
+            // Update the global status
+            _currentTransStatus.value = TransStatus(
+                selectedTransactionId = newTransactionInstance.transactionID, // This should be the Long ID
+                selectedTransactionName = newTransactionInstance.transactionName,
+                transactionStatus = "active_pending_start", // Or whatever initial status is appropriate
+               //currentStepName = newTransactionInstance.getStateEntries().firstOrNull()?.label ?: "Initial Step",
+                //totalSteps = newTransactionInstance.getStateEntries().size,
+                //currentStepNumber = if (newTransactionInstance.getStateEntries().isNotEmpty()) 1 else 0,
+                //isFirstStep = true,
+                //isLastStep = newTransactionInstance.getStateEntries().size <= 1
+            )
+            // Optionally, also save this initial status to the transaction instance itself
+            newTransactionInstance.transactionStatus = _currentTransStatus.value.copy()
+
+            Log.i(
+                "TransactionManager",
+                "Transaction '${newTransactionInstance.transactionName}' (ID: $transactionStringId, NumericID: ${newTransactionInstance.transactionID}) created and set active."
+            )
+        } else {
+            Log.e("TransactionManager", "Failed to create transaction of type: $transactionType from factory.")
+        }
+        return newTransactionInstance
     }
 
     fun setActiveTransaction(transactionId: Long) {
@@ -67,10 +324,6 @@ class TransactionManager {
         }
     }
 
-    fun getActiveTransaction(): BaseTransaction? {
-        return openTransactions.find { it.transactionID == activeTransactionId }
-    }
-
     // Simplified state creation. In a real app, this might involve dependency injection.
     fun createStateForTransaction(stateName: String, transaction: BaseTransaction): StateBase? {
         return when (stateName) {
@@ -83,6 +336,10 @@ class TransactionManager {
                 null
             }
         }
+    }
+
+    fun setDashboardFragment(fragm: Fragment) {
+        fragment = fragm
     }
 
     fun addStateToActiveTransactionByName(stateName: String): StateBase? {
@@ -109,14 +366,18 @@ class TransactionManager {
         return state
     }
 
-    suspend fun executeState(state: StateBase, MainActivityContext: Context, initialContext: Map<String, Any>? = null): Map<String, Any>? {
+    suspend fun executeState(
+        state: StateBase,
+        initialContext: Map<String, Any>? = null,
+        fragment: Fragment
+    ): Map<String, Any>? {
         val activeTransaction = getActiveTransaction() ?: run {
             println("Error: No active transaction to execute state.")
             return null
         }
         if (activeTransaction.currentState != state && !activeTransaction.states.contains(state)) {
-             println("Error: State ${state.getName()} is not part of the active transaction ${activeTransaction.getName()}.")
-             return null
+            println("Error: State ${state.getName()} is not part of the active transaction ${activeTransaction.getName()}.")
+            return null
         }
 
         activeTransaction.currentState = state // Ensure this is the current state being executed
@@ -124,21 +385,24 @@ class TransactionManager {
         var returnData: Map<String, Any>? = null
 
         println("--- Starting execution for state: ${state.getName()} ---")
-        _currentTransStatus.value = _currentTransStatus.value.copy(transactionStatus = "Executing ${state.getName()}")
+        _currentTransStatus.value =
+            _currentTransStatus.value.copy(transactionStatus = "Executing ${state.getName()}")
 
         try {
             val inputData = state.fetchInputData(executionContext)
-            val executionResult = state.executeDialog(inputData,MainActivityContext)
+            val executionResult = state.executeLogic(inputData, fragment)
             returnData = state.fetchReturnData(executionResult)
             state.commit(returnData)
 
             println("--- State ${state.getName()} completed successfully ---")
             activeTransaction.context.putAll(returnData) // Update shared context
-            _currentTransStatus.value = _currentTransStatus.value.copy(transactionStatus = "${state.getName()} Committed")
+            _currentTransStatus.value =
+                _currentTransStatus.value.copy(transactionStatus = "${state.getName()} Committed")
 
         } catch (e: Exception) {
             println("--- Error during execution of state ${state.getName()}: ${e.message} ---")
-            _currentTransStatus.value = _currentTransStatus.value.copy(transactionStatus = "Error in ${state.getName()}")
+            _currentTransStatus.value =
+                _currentTransStatus.value.copy(transactionStatus = "Error in ${state.getName()}")
             try {
                 state.rollback(e)
             } catch (rollbackError: Exception) {
@@ -148,7 +412,7 @@ class TransactionManager {
             // For this starter, we'll just log and not re-throw to allow UI to update.
             return null // Indicate failure
         } finally {
-             // activeTransaction.currentState = null // Or move to next state logic
+            // activeTransaction.currentState = null // Or move to next state logic
         }
         return returnData
     }
@@ -195,16 +459,51 @@ class TransactionManager {
         }
     }
     // Define the sealed class for UI actions (can be outside the class too)
-    sealed class UiAction {
-        data class ShowDialogActivity(val intent: Intent) : UiAction()
-        data class DialogResult(val resultCode: Int, val data: Intent?) : UiAction() // Add this
-        // Add other UI actions as needed
-    }
+    // In TransactionManager.kt (UiAction definition)
+    // In TransactionManager.kt (UiAction definition)
 
     private val _uiActions = MutableSharedFlow<UiAction>()
     val uiActions = _uiActions.asSharedFlow()
 
+// In TransactionManager.kt
 
+    // Map to store active dialog requests and their means of completion
+    private val activeDialogRequests = mutableMapOf<String, CompletableDeferred<Map<String, Any>?>>()
+    private var nextRequestId = 0 // Simple request ID generator
+
+    // In TransactionManager.kt
+
+    suspend fun requestInputDialogGeneric(
+        dialogActionConfig: UiAction.ShowDialogActivity,
+        currentFragment: Fragment // Still needed for context, though not directly used by UiAction
+    ): Map<String, Any>? {
+        val requestId = "dialogReq_${nextRequestId++}"
+        val deferredResult = CompletableDeferred<Map<String, Any>?>()
+        activeDialogRequests[requestId] = deferredResult
+
+        val finalAction = dialogActionConfig.copy(
+            //requestId = requestId, // Override requestId
+           // onResult = { resultDataMap -> // Override onResult to use internal handling
+           //     handleDialogResult(requestId, resultDataMap)
+           // }
+        )
+
+        _uiActions.emit(finalAction)
+        Log.d("TransactionManager", "Emitted generic ShowDialogActivity for type ${finalAction.dialogType} with requestId $requestId")
+        return deferredResult.await()
+    }
+
+    // This method is called by the UI layer (e.g., DashboardFragment via ViewModel)
+// when a dialog (like VesselSelectStateFrag) provides its result.
+    fun handleDialogResult(requestId: String, data: Map<String, Any>?) {
+        Log.d("TransactionManager", "handleDialogResult for requestId: $requestId, Data: $data")
+        val deferred = activeDialogRequests.remove(requestId)
+        if (deferred != null) {
+            deferred.complete(data)
+        } else {
+            Log.w("TransactionManager", "No active dialog request found for ID: $requestId")
+        }
+    }
     // You might also need a function to process the result received by the Activity
     fun processDialogActivityResult(resultCode: Int, data: Intent?) {
         // This function will be called from MainActivity

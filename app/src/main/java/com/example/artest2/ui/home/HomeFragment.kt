@@ -21,12 +21,6 @@ import androidx.navigation.fragment.findNavController
 import com.example.artest2.R
 import com.example.artest2.databinding.FragmentHomeBinding
 
-import com.example.artest2.ui.statedialogs.VesselSelectStateFrag
-
-import androidx.fragment.app.DialogFragment
-import androidx.navigation.fragment.findNavController
-import androidx.navigation.ui.setupWithNavController
-import com.google.android.material.bottomnavigation.BottomNavigationView
 
 private fun Any.findFragmentById(navHostFragment: Int) {}
 

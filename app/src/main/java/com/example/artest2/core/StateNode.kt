@@ -8,5 +8,6 @@ data class StateNode(
     val label: String, // User-friendly label
     val connectedTo: List<String> = emptyList(), // Keys of next possible states
     val componentIdentifier: String? = null, // Identifier for the UI component (e.g. Fragment tag)
-    val componentProps: Map<String, Any>? = null // Initial properties for the component
+    val componentProps: Map<String, Any>? = null, // Initial properties for the component
+    val handlerStateName: String // Name of the StateBase class that handles this state
 )

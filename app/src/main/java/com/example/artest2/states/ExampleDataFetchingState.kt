@@ -4,9 +4,10 @@ import android.util.Log
 import android.content.Context
 import com.example.artest2.core.BaseTransaction
 import com.example.artest2.core.StateBase
-import com.example.artest2.ui.statedialogs.VesselSelectStateFrag
+import com.example.artest2.ui.statedialogs.VesselSelectStateViewModel
 import kotlinx.coroutines.delay
 import android.content.Intent
+import androidx.fragment.app.Fragment
 import com.example.artest2.R
 
 
@@ -37,13 +38,13 @@ class ExampleDataFetchingState(parentTransaction: BaseTransaction) :
         return processedData
     }
 
-    override suspend fun executeDialog(inputData: Map<String, Any>, MainActivityContext:Context):Any {
+    override suspend fun executeLogic(inputData: Map<String, Any>,fragment: Fragment?):Any {
         Log.i("ART", "[${getName()}] Executing dialog with data: $inputData")
         println("[${getName()}] Executing dialog with data: $inputData")
         delay(300) // Simulate processing or user interaction time
 
         // Use the passed 'context' parameter directly
-        val androidContext: Context = MainActivityContext
+        //val androidContext: Context = MainActivityContext
 
         // Optional: Validate input data before creating Intent
         val userId = inputData["userId"] as? String

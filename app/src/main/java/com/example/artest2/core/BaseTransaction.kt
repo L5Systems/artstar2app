@@ -1,9 +1,15 @@
 package com.example.artest2.core
 
+import com.example.artest2.manager.TransactionManager
+
 abstract class BaseTransaction(
     val transactionID: Long,
-    val transactionName: String
+    val transactionName: String,
+    val transactionManager: TransactionManager
 ) {
+    val _transactionManager = transactionManager
+    val _transactionName = transactionName
+    val _transactionId = transactionID.toString()
     val states: MutableList<StateBase> = mutableListOf()
     var currentState: StateBase? = null
     val context: MutableMap<String, Any> = mutableMapOf() // Shared context across states
@@ -15,6 +21,13 @@ abstract class BaseTransaction(
         selectedTransactionName = transactionName,
         transactionStatus = "inactive"
     )
+    fun getTransactionID(): String{
+        return _transactionId
+    }
+    // Rename this function if you need custom logic
+    fun retrieveTransactionManagerInstance(): TransactionManager {
+        return transactionManager
+    }
 
     private val transLevelData: MutableList<TransLevelData> = mutableListOf()
 

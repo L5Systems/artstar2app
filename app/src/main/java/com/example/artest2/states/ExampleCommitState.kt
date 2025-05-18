@@ -1,6 +1,7 @@
 package com.example.artest2.states
 
 import android.content.Context
+import androidx.fragment.app.Fragment
 import com.example.artest2.core.BaseTransaction
 import com.example.artest2.core.StateBase
 import kotlinx.coroutines.delay
@@ -13,7 +14,7 @@ class ExampleCommitState(parentTransaction: BaseTransaction) :
         return context ?: emptyMap()
     }
 
-    override suspend fun executeDialog(inputData: Map<String, Any>, MainActivityContext:Context): Any {
+    override suspend fun executeLogic(inputData: Map<String, Any>,fragment: Fragment?): Any {
         println("[${getName()}] Reviewing before final commit: $inputData")
         delay(200)
         // No real dialog, just pass through
