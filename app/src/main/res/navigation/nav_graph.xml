@@ -10,7 +10,7 @@
         android:label="Dashboard"
         tools:layout="@layout/fragment_dashboard">
         <action
-            android:id="@+id/action_dashboardFragment_to_stateInputFragment"
+            android:id="@+id/action_dashboardFragment_to_StateInputFragment"
             app:destination="@id/dashboardFragment" />
     </fragment>
 

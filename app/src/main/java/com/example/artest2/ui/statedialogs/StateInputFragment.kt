@@ -1,7 +1,6 @@
 package com.example.artest2.ui.statedialogs
 
 import android.os.Bundle
-import android.os.Parcelable // For DialogManager.DialogType if it's Parcelable
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -73,7 +72,9 @@ class StateInputFragment : DialogFragment() {
             neutralButtonText: String? = null,
             inputHint: String? = null,
             items: List<String>? = null,
-            initialSelection: String? = null
+            initialSelection: String? = null,
+            positiveButton: String? ="",
+            negativeButton: String? =""
             // customData: Map<String, Any>? = null // Add if you pass custom data
         ): StateInputFragment {
             val fragment = StateInputFragment()
@@ -146,6 +147,13 @@ class StateInputFragment : DialogFragment() {
                 binding.stateInputEditText.isVisible = false
                 binding.stateInputSpinner.isVisible = false
             }
+
+            DialogManager.DialogType.QUANTITY_INPUT_FRAGMENT -> TODO()
+            DialogManager.DialogType.TEXT_INPUT_DIALOG -> TODO()
+            DialogManager.DialogType.VESSEL_SELECTION_FRAGMENT -> TODO()
+            DialogManager.DialogType.CONFIRMATION_DIALOG -> TODO()
+            DialogManager.DialogType.BUNKER_DETAILS_FRAGMENT -> TODO()
+            DialogManager.DialogType.GENERIC_MESSAGE -> TODO()
         }
 
         binding.stateInputEditText.setText(viewModel.currentTextInput.value)

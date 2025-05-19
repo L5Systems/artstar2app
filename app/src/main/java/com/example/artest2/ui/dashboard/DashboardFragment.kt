@@ -1,5 +1,6 @@
 package com.example.artest2.ui.dashboard
 
+import com.example.artest2.R
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -9,16 +10,23 @@ import android.widget.ArrayAdapter
 import android.widget.AdapterView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AlertDialog.*
+import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.NavController
+import androidx.navigation.fragment.findNavController
+import com.example.artest2.DialogManager
 import com.example.artest2.databinding.FragmentDashboardBinding
 import com.example.artest2.manager.TransactionManager
-import com.example.artest2.transactions.SampleTransaction
+
 import com.example.artest2.ui.statedialogs.StateInputFragment
 import kotlinx.coroutines.launch
+
+
 
 public val TAG: String = "ZZ"
 
@@ -65,7 +73,7 @@ class DashboardFragment : Fragment() {
             textView.text = it
         }
         dashboardViewModel.setDashboardFragment(this)
-
+        navController = findNavController()
         collectTransactionStatus(dashboardViewModel)
         collectUiActions(dashboardViewModel)
         collectUiState(dashboardViewModel)
@@ -121,7 +129,14 @@ class DashboardFragment : Fragment() {
             }
 
             private fun showStateDrivenDialog(dialogAction: TransactionManager.UiAction.ShowDialogActivity) {
-                val dialogFragment = StateInputFragment.newInstance(dialogAction.requestId, dialogAction.dialogType, "testDialog", "DO This", "OK", "CANCEL")
+                val dialogFragment = StateInputFragment.newInstance(
+                    dialogAction.requestId,
+                    dialogAction.dialogType,
+                    "testDialog",
+                    "DO This",
+                    "OK",
+                    "CANCEL"
+                )
                 dialogFragment.setDialogListener(this) // DashboardFragment is the StateDialogListener
                 dialogFragment.show(childFragmentManager, StateInputFragment.TAG + "_" + dialogAction.requestId) // Unique tag
             }
@@ -249,13 +264,172 @@ class DashboardFragment : Fragment() {
                     }
 
                     is TransactionManager.UiAction.ShowDialogActivity -> TODO()
-                    is TransactionManager.UiAction.RequestInputScreen -> TODO()
+                    is TransactionManager.UiAction.RequestInputScreen -> requestInputScreen(action)
                     is TransactionManager.UiAction.ShowMessage -> TODO()
                     is TransactionManager.UiAction.UpdateTransactionStatus -> TODO()
                 }
             }
         }
     }
+    private fun requestInputScreen(action: TransactionManager.UiAction.RequestInputScreen) {
+
+        Log.i("DashboardFragment", "Handling RequestInputScreen (ID: ${action.requestId}) for screen: ${action.screenIdentifier}")
+        // Decide which actual Fragment/Dialog to show based on action.screenIdentifier
+        // This is similar to how ShowDialogActivity uses dialogType.
+
+        val dialogTypeToUse: DialogManager.DialogType = when (action.screenIdentifier) {
+            "TEXT_INPUT_DIALOG" -> DialogManager.DialogType.TEXT_INPUT_DIALOG
+            "SELECT_QUANTITY" -> DialogManager.DialogType.QUANTITY_INPUT_FRAGMENT // Hypothetical
+            // Add more mappings as needed
+            else -> {
+                Log.w("DashboardFragment", "Unknown screenIdentifier for RequestInputScreen: ${action.screenIdentifier}")
+                viewModel.processFragmentCancellation(action.requestId) // CRITICAL: Complete the deferred
+                return //@collect // Stop further processing for this unknown action
+            }
+        }
+
+        // Now, effectively treat it like a ShowDialogActivity
+        val showDialogAction = TransactionManager.UiAction.ShowDialogActivity(
+            requestId = action.requestId,
+            stateName = "UnknownState_From_RequestInputScreen", // Or try to get this from TM if possible
+            transactionId = "UnknownTransaction_From_RequestInputScreen", // Or try to get this from TM
+            dialogType = dialogTypeToUse,
+            onResult = action.onResult, // Or construct from action
+            title = action.prompt ?: "Input Required",
+            message = "",
+            positiveButtonText = "OK",
+            negativeButtonText = "Cancel",    // action.initialValue,
+            neutralButtonText = "",
+            items = "",
+            initialSelection = "",
+            callback = {},
+            inputHint = "")
+        handleShowDialogActivity(showDialogAction) // Reuse your existing navigation logic
+
+    }
+    /**
+     * Handles the ShowDialogActivity UI Action by navigating to the appropriate
+     * Fragment or showing a system dialog based on the action's dialogType.
+     */
+    private fun handleShowDialogActivity(action: TransactionManager.UiAction.ShowDialogActivity) {
+        Log.i("DashboardFragment", "Handling ShowDialogActivity for RequestID: ${action.requestId}, DialogType: ${action.dialogType}")
+
+        // Always ensure the NavController is ready and the Fragment is in a valid state to navigate
+        if (!isAdded || !navController.currentDestination?.id.let { it == R.id.dashboardFragment || it == null /* initial state */ }) {
+            // Or if currentDestination is something else, it might mean a navigation is already in progress
+            Log.w("DashboardFragment", "Cannot handle ShowDialogActivity: Fragment not added, NavController not ready, or already navigating. RequestID: ${action.requestId}")
+            viewModel.processFragmentCancellation(action.requestId) // Critical: inform TM
+            return
+        }
+
+        try {
+            when (action.dialogType) {
+                DialogManager.DialogType.TEXT_INPUT_DIALOG -> {
+                    val args = bundleOf(
+                        // Standard arguments your VesselSelectionFragment expects
+                        "requestId" to action.requestId, // Essential for result mapping
+                        "dialogTitle" to action.title,
+                        // Example of passing custom data
+                       // "customFilter" to (action.customData["filter"] as? String),
+                        //"region" to (action.customData["region"] as? String)
+                        // Add other arguments defined in your nav_graph for VesselSelectionFragment
+                    )
+                    // Ensure R.id.action_dashboardFragment_to_vesselSelectionFragment exists in your nav graph
+                    // and originates from dashboardFragment
+                    navController.navigate(R.id.StateInputFragment, args)
+                }
+
+                DialogManager.DialogType.TEXT_INPUT_DIALOG -> {
+                    // This could be a simple DialogFragment for text input
+                    // Example: SimpleTextDialogFragment.newInstance(...).show(...)
+                    // For this to work seamlessly with the TransactionManager's deferred result,
+                    // this DialogFragment would also need to use the FragmentResultListener
+                    // or a direct callback mechanism that eventually calls viewModel.processFragmentResult.
+
+                    // Let's assume you have a StateInputFragment or similar that can handle this
+                    val dialogFragment = StateInputFragment.newInstance(
+                        requestId = action.requestId,
+                        dialogType = action.dialogType, // Pass it along
+                        title = action.title ?: "Input Text",
+                        message = action.message ?: "Please enter the required information.",
+                        positiveButton = action.positiveButtonText ?: "OK",
+                        negativeButton = action.negativeButtonText ?: "Cancel",
+                        inputHint = action.inputHint
+                        // `items` and `initialSelection` might not be used by a simple text input
+                    )
+                    // The StateInputFragment needs to be set up to use the FragmentResult API
+                    // and call parentFragmentManager.setFragmentResult(...)
+                    // It should also be prepared to be launched by childFragmentManager if it's a DialogFragment
+                    dialogFragment.show(childFragmentManager, "${StateInputFragment.TAG}_${action.requestId}")
+                }
+
+                DialogManager.DialogType.CONFIRMATION_DIALOG -> {
+                    Builder(requireContext())
+                        .setTitle(action.title)
+                        .setMessage(action.message)
+                        .setPositiveButton(action.positiveButtonText) { _, _ ->
+                            // Positive confirmation
+                            viewModel.processFragmentResult(action.requestId, mapOf("confirmed" to true))
+                        }
+                        .setNegativeButton(action.negativeButtonText) { _, _ ->
+                            // Negative confirmation or cancellation
+                            viewModel.processFragmentResult(action.requestId, mapOf("confirmed" to false, "cancelled" to true))
+                        }
+                        .setOnCancelListener {
+                            // Dismissed without button press (e.g. back button)
+                            viewModel.processFragmentCancellation(action.requestId)
+                        }
+                        .show()
+                }
+
+                DialogManager.DialogType.BUNKER_DETAILS_FRAGMENT -> {
+                    val args = bundleOf(
+                        "requestId" to action.requestId,
+                        "transactionId" to action.transactionId,
+                        //"initialData" to (action.customData["details"] as? HashMap<String, Any>) // Example custom data
+                    )
+                    // Ensure R.id.action_dashboardFragment_to_bunkerDetailsFragment exists
+                    // navController.navigate(R.id.action_dashboardFragment_to_bunkerDetailsFragment, args)
+                    Log.w("DashboardFragment", "Navigation for BUNKER_DETAILS_FRAGMENT not fully implemented yet.")
+                    viewModel.processFragmentCancellation(action.requestId) // Placeholder
+                }
+
+                DialogManager.DialogType.GENERIC_MESSAGE -> {
+                    // This DialogType might be better handled by UiAction.ShowMessage,
+                    // but if ShowDialogActivity is used for it:
+                    Builder(requireContext())
+                        .setTitle(action.title)
+                        .setMessage(action.message)
+                        .setPositiveButton(action.positiveButtonText ?: "OK") { dialog, _ ->
+                            dialog.dismiss()
+                            // If a GENERIC_MESSAGE shown via ShowDialogActivity is expected
+                            // to "complete" a step, send a generic result.
+                            viewModel.processFragmentResult(action.requestId, mapOf("acknowledged" to true))
+                        }
+                        .setOnCancelListener {
+                            viewModel.processFragmentCancellation(action.requestId) // If cancellation means something
+                        }
+                        .show()
+                }
+
+                // Add cases for other DialogManager.DialogType values you define
+                // else -> { ... } // Kotlin 'when' should be exhaustive if DialogType is an enum
+                DialogManager.DialogType.VESSEL_SELECTION -> TODO()
+                DialogManager.DialogType.USER_INPUT_TEXT -> TODO()
+                DialogManager.DialogType.CONFIRMATION -> TODO()
+                DialogManager.DialogType.INFO_DISPLAY -> TODO()
+                DialogManager.DialogType.QUANTITY_INPUT_FRAGMENT -> TODO()
+                DialogManager.DialogType.VESSEL_SELECTION_FRAGMENT -> TODO()
+            }
+        } catch (e: Exception) {
+            // Catching general exceptions during navigation or dialog showing is crucial
+            Log.e("DashboardFragment", "Failed to handle ShowDialogActivity for type ${action.dialogType}, RequestID: ${action.requestId}", e)
+            // CRITICAL: Inform the TransactionManager that the UI could not be shown,
+            // otherwise the state will hang indefinitely waiting for a result.
+            viewModel.processFragmentCancellation(action.requestId)
+        }
+    }
+
     // NEW FUNCTION TO COLLECT UI STATE
     private fun collectUiState(dashboardView: DashboardViewModel) {
         lifecycleScope.launch {
@@ -305,5 +479,13 @@ class DashboardFragment : Fragment() {
         _binding = null
     }
 }
+
+private fun DashboardViewModel.processFragmentResult(
+    requestId: String,
+    mapOf: Map<String, Boolean>
+) {
+}
+
+private fun DashboardViewModel.processFragmentCancellation(requestId: String) {}
 
 private fun StateInputFragment.setDialogListener(fragment: Fragment) {}

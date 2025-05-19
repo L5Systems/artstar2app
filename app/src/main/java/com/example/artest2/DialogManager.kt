@@ -7,8 +7,15 @@ class DialogManager {
         VESSEL_SELECTION,
         USER_INPUT_TEXT,
         CONFIRMATION,
-        INFO_DISPLAY
+        INFO_DISPLAY,
+        QUANTITY_INPUT_FRAGMENT,
+        TEXT_INPUT_DIALOG,
+        VESSEL_SELECTION_FRAGMENT,
+
+        CONFIRMATION_DIALOG,
+        BUNKER_DETAILS_FRAGMENT,
         // Add other generic dialog types as needed
+        GENERIC_MESSAGE
     }
    val SOME_CONSTANT = "value"
 

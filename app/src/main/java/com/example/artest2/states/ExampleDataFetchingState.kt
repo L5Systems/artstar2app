@@ -7,8 +7,10 @@ import com.example.artest2.core.StateBase
 import com.example.artest2.ui.statedialogs.VesselSelectStateViewModel
 import kotlinx.coroutines.delay
 import android.content.Intent
+import com.example.artest2.DialogManager
 import androidx.fragment.app.Fragment
 import com.example.artest2.R
+import com.example.artest2.core.ApiCallData
 
 
 class ExampleDataFetchingState(parentTransaction: BaseTransaction) :
@@ -38,52 +40,93 @@ class ExampleDataFetchingState(parentTransaction: BaseTransaction) :
         return processedData
     }
 
-    override suspend fun executeLogic(inputData: Map<String, Any>,fragment: Fragment?):Any {
-        Log.i("ART", "[${getName()}] Executing dialog with data: $inputData")
-        println("[${getName()}] Executing dialog with data: $inputData")
-        delay(300) // Simulate processing or user interaction time
+    override suspend fun executeLogic(
+        inputData: Map<String, Any>,
+        fragment: Fragment?
+    ): StateExecutionResult {
+        println("[$stateName] Executing logic with input: $inputData")
+        val initialValue = inputData["initialValue"] as? Int ?: 0
+        val transactionManager = getTransactionManager()
 
-        // Use the passed 'context' parameter directly
-        //val androidContext: Context = MainActivityContext
+        if (transactionManager == null) {
+            println("[$stateName] Error: TransactionManager not available.")
+            return StateExecutionResult.Failure(IllegalStateException("TransactionManager not found"))
+        }
 
-        // Optional: Validate input data before creating Intent
-        val userId = inputData["userId"] as? String
-        val previousStepData = inputData["previousStepData"] as? String
+        if (fragment == null) {
+            println("[$stateName] Error: Fragment host not available for UI operations.")
+            return StateExecutionResult.Failure(IllegalStateException("Fragment host not available"))
+        }
 
-        // Create an Intent to start StateDialogActivity
-        //val intent = Intent(androidContext, StateDialogActivity::class.java)
+        try {
+            // 1. Request Vessel Selection from the UI via TransactionManager
+            println("[$stateName] Requesting vessel selection...")
 
-        // Pass data to StateDialogActivity using the Intent
-       // if (userId != null) {
-       //     intent.putExtra("userId", userId)
-       // } else {
-       //     Log.w("ART", "[${getName()}] userId is null or not a String in inputData.")
-       //     // Decide how to handle this: throw error, provide default, etc.
-       // }
-      //  if (previousStepData != null) {
-      //      intent.putExtra("previousStepData", previousStepData)
-      //  } else {
-    //        Log.w("ART", "[${getName()}] previousStepData is null or not a String in inputData.")
-            // Decide how to handle this
-    //    }
-     //   intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
-       // androidContext.startActivity(intent)
-    //    val dialog = Dialog(androidContext)
-  //      dialog.setContentView(R.layout.fragment_state_dialog) // Set the layout first
-    //    dialog.show()
-       // IMPORTANT: The following lines for simulating result need to be replaced
-        // with a proper mechanism to get the result back from StateDialogActivity.
-        // This is a placeholder and will not work correctly for getting actual user input.
-        Log.w("ART", "[${getName()}] WARNING: Simulated dialog result - replace with proper result handling from ActivityResultContracts.")
-        delay(2000) // Still simulating, but acknowledge it's not real
+            // Define the configuration for the input screen.
+            // This object describes WHAT the state needs from the UI.
+            // The TransactionManager will take this, add a requestId, and manage the callback.
+            val inputScreenConfig = com.example.artest2.manager.TransactionManager.InputScreenConfig(
+                // No requestId here - TransactionManager will generate it.
+                // No onResult here - TransactionManager will manage the result mechanism.
+                dialogType = DialogManager.DialogType.VESSEL_SELECTION,
+                title = "Select Vessel for Processing",
+                message = "Please choose your vessel from the list below.",
+                items = listOf("Voyager", "Enterprise", "Discovery", "Reliant"),
+                initialSelection = "Voyager",
+                positiveButtonText = "Confirm Vessel",
+                negativeButtonText = "Skip Vessel",
+                customData = mapOf("sourceState" to stateName) // Example of passing extra data
+            )
 
-        // The actual result would be obtained through a callback mechanism, not here.
-        // The data for dialogResult should come from the actual result received from StateDialogActivity.
-        val simulatedDialogResult = mapOf("userName" to "SimulatedUser", "consentGiven" to false) // Placeholder data
+            // This call to TransactionManager will suspend until the UI provides a result.
+            // TransactionManager.requestInputScreen will internally:
+            //   - Generate a unique requestId.
+            //   - Create and store a CompletableDeferred for this requestId.
+            //   - Construct the actual UiAction (like RequestInputScreen) including the requestId
+            //     and its internal onResult mechanism.
+            //   - Emit the UiAction.
+            //   - Await the CompletableDeferred.
+            val vesselResult: Map<String, Any>? = transactionManager.requestInputScreen( // Renamed method for clarity
+                config = inputScreenConfig,
+                currentFragment = fragment
+            )
 
-        Log.i("ART", "[${getName()}] Dialog result (simulated): $simulatedDialogResult")
-        println("[${getName()}] Dialog result (simulated): $simulatedDialogResult")
-        return simulatedDialogResult // Return the simulated result for now
+            var selectedVessel = "N/A"
+            // Assuming your StateInputFragment.ResultKeys are accessible or defined in a shared place
+            val resultKeys = com.example.artest2.ui.statedialogs.StateInputFragment.ResultKeys
+
+            if (vesselResult != null && vesselResult[resultKeys.POSITIVE_CLICK] == true) {
+                selectedVessel = vesselResult[resultKeys.SELECTED_ITEM] as? String ?: "Unknown Vessel"
+                println("[$stateName] Vessel selected: $selectedVessel")
+                storeStateOutputData(
+                    ApiCallData(
+                        "vesselSelection",
+                        mapOf("vessel" to selectedVessel),
+                        "zztop"
+                    )
+                )
+            } else {
+                println("[$stateName] Vessel selection skipped or cancelled.")
+                storeStateOutputData(ApiCallData(
+                    "vesselSelection",
+                    mapOf("vessel" to "SKIPPED"),
+                    action=  "zztop"
+                ))
+            }
+
+            // ... (rest of the logic) ...
+
+            return StateExecutionResult.Success
+
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            println("[$stateName] Coroutine cancelled during UI interaction: ${e.message}")
+            rollback(e) // Perform rollback actions
+            return StateExecutionResult.Failure(e)
+        } catch (e: Exception) {
+            println("[$stateName] Error during execution: ${e.message}")
+            rollback(e) // Perform rollback actions
+            return StateExecutionResult.Failure(e)
+        }
     }
     override suspend fun commit(returnData: Map<String, Any>) {
         println("[${getName()}] Committing data: $returnData")
