@@ -1,6 +1,7 @@
 package com.example.artest2.ui.statedialogs
 
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -13,6 +14,8 @@ import androidx.fragment.app.setFragmentResult
 import androidx.lifecycle.ViewModelProvider
 import com.example.artest2.DialogManager // Make sure DialogType is accessible
 import com.example.artest2.databinding.FragmentStateInputBinding
+import com.example.artest2.manager.TransactionManager
+import com.example.artest2.ui.dashboard.DashboardViewModel
 
 
 class StateInputFragment : DialogFragment() {
@@ -73,8 +76,8 @@ class StateInputFragment : DialogFragment() {
             inputHint: String? = null,
             items: List<String>? = null,
             initialSelection: String? = null,
-            positiveButton: String? ="",
-            negativeButton: String? =""
+            positiveButton: String,
+            negativeButton: String
             // customData: Map<String, Any>? = null // Add if you pass custom data
         ): StateInputFragment {
             val fragment = StateInputFragment()
@@ -133,7 +136,9 @@ class StateInputFragment : DialogFragment() {
         when (viewModel.dialogType) {
             DialogManager.DialogType.USER_INPUT_TEXT -> {
                 binding.stateInputEditText.isVisible = true
-                binding.stateInputSpinner.isVisible = false
+                binding.stateInputSpinner.isVisible = true
+                binding.stateInputNegativeButton.isVisible = true;
+                binding.stateInputPositiveButton.isVisible = true;
             }
             DialogManager.DialogType.VESSEL_SELECTION -> {
                 binding.stateInputEditText.isVisible = false
@@ -172,11 +177,15 @@ class StateInputFragment : DialogFragment() {
                             is Int -> putInt(key, value)
                             // Add other types
                         }
+
                     }
                 }
                 viewModel.requestId?.let { reqId ->
-                    setFragmentResult(reqId, resultBundle)
+                    //var result = setFragmentResult(reqId, resultDataMap)
+
+                    sendResultBack(viewModel.requestId!!, resultBundle)
                 }
+
                 dismiss()
             } else {
                 if (viewModel.dialogType == DialogManager.DialogType.USER_INPUT_TEXT) {
@@ -195,8 +204,41 @@ class StateInputFragment : DialogFragment() {
             }
             dismiss()
         }
-    }
+        binding.stateInputPositiveButton.text = "OK"
+       // binding.stateInputPositiveButton.setOnClickListener {
+            // ... handle result ...
+       //     dismiss()
+       // }
 
+        binding.stateInputNegativeButton.text = "Cancel"
+        binding.stateInputNegativeButton.setOnClickListener {
+            // ... handle cancellation ...
+            dismiss()
+        }
+        // Ensure buttons themselves are visible if they were initially gone (they aren't in your XML)
+        // binding.stateInputPositiveButton.visibility = View.VISIBLE
+        // binding.stateInputNegativeButton.visibility = View.VISIBLE
+    }
+    // In VesselSelectionFragment.kt (when it's ready to return a result)
+    // This assumes VesselSelectionFragment was launched in a way that expects a result
+    // via an Activity intermediary or a specific contract.
+    private fun sendResultBack(requestId: String, dataMap: Bundle) {
+        //val resultBundle = Bundle().apply {
+        //    putString("requestId", requestId)
+        //    putSerializable("dataMap", dataMap)
+        //}
+        // If launched by an Activity for result:
+        // requireActivity().setResult(Activity.RESULT_OK, Intent().putExtras(resultBundle))
+        // requireActivity().finish()
+
+        // If using Jetpack Navigation Component & Fragment Result API:
+        // (This is the more common way for Fragment-to-Fragment)
+        //parentFragmentManager.setFragmentResult("VesselSelectionKey_from_DashboardFragment", dataMap)
+        //findNavController().popBackStack() // Go back to DashboardFragmen
+        Log.i("StateInputFragment", "Sending Shoe Message result back to DashboardFragment")
+        viewModel.sendResultBack(requestId,dataMap)
+        TransactionManager.UiAction.ShowMessage(requestId,  "Art Dialog finished")
+    }
     private fun observeViewModel() {
         // ... (your existing observeViewModel logic) ...
         viewModel.title.observe(viewLifecycleOwner) { title ->
@@ -244,6 +286,12 @@ class StateInputFragment : DialogFragment() {
         _binding = null
     }
 }
+
+private fun completeUiRequest() {
+    TODO("Not yet implemented")
+
+}
+
 
 // SimpleTextWatcher (as defined before)
 private class SimpleTextWatcher(private val onTextChanged: (String) -> Unit) : android.text.TextWatcher {

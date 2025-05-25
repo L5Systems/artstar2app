@@ -43,19 +43,6 @@ class DashboardFragment : Fragment() {
     private val binding get() = _binding!!
     private var selectedTran:String = ""
     private lateinit var dashboardViewModel: DashboardViewModel
-    // ActivityResultLauncher for Fragments that return results
-
-    //private val vesselSelectionLauncher = registerForActivityResult(VesselSelectionResultContract()) { resultData ->
-        // The resultData here should include the 'requestId'
-    //    val requestId = resultData?.getString("requestId")
-    //   if (requestId != null) {
-    //        val dataMap = resultData.getSerializableExtra("dataMap") as? HashMap<String, Any>
-    //        viewModel.processDialogResult(requestId, dataMap)
-    //    } else {
-    //        Log.w("DashboardFragment", "Received result from VesselSelectionFragment without a requestId.")
-   //     }
-  // }
-
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -135,7 +122,9 @@ class DashboardFragment : Fragment() {
                     "testDialog",
                     "DO This",
                     "OK",
-                    "CANCEL"
+                    "CANCEL",
+                    positiveButton = "XX",
+                    negativeButton = "NO"
                 )
                 dialogFragment.setDialogListener(this) // DashboardFragment is the StateDialogListener
                 dialogFragment.show(childFragmentManager, StateInputFragment.TAG + "_" + dialogAction.requestId) // Unique tag
@@ -254,13 +243,16 @@ class DashboardFragment : Fragment() {
         val manager = dashboardView.getTransactionManager()
         lifecycleScope.launch {
 
+
             dashboardView.uiActions.collect { action ->
                 when (action) {
                        is TransactionManager.UiAction.DialogResult -> {
                         // This action is primarily for internal ViewModel/TransactionManager use,
                         // not typically handled directly in the Activity collector.
                         // The result is already being passed via handleDialogResult().
-                        Log.d("MainActivity", "Collecting UiAction: DialogResult (handled internally)")
+                           viewModel. processStateCompletion(action.requestId,null)  //state.message
+
+                           Log.d("MainActivity", "Collecting UiAction: DialogResult (handled internally)")
                     }
 
                     is TransactionManager.UiAction.ShowDialogActivity -> TODO()
@@ -336,7 +328,7 @@ class DashboardFragment : Fragment() {
                     )
                     // Ensure R.id.action_dashboardFragment_to_vesselSelectionFragment exists in your nav graph
                     // and originates from dashboardFragment
-                    navController.navigate(R.id.StateInputFragment, args)
+                    navController.navigate(R.id.action_dashboardFragment_to_StateInputFragment, args)
                 }
 
                 DialogManager.DialogType.TEXT_INPUT_DIALOG -> {
@@ -447,6 +439,7 @@ class DashboardFragment : Fragment() {
                     is DashboardViewModel.UiState.StepComplete -> {
                         Log.d("MainActivity", "UI State: Step Complete - ${state.message}")
                         // Update UI to show step completion message, maybe enable next button
+                        viewModel. processStateCompletion(state.message,null)
                     }
                     is DashboardViewModel.UiState.TransactionComplete -> {
                         Log.d("MainActivity", "UI State: Transaction Complete - ${state.message}")

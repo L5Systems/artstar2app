@@ -77,7 +77,7 @@ class ExampleDataFetchingState(parentTransaction: BaseTransaction) :
                 negativeButtonText = "Skip Vessel",
                 customData = mapOf("sourceState" to stateName) // Example of passing extra data
             )
-
+            Log.i("ART", "Input screen config: ZZTOP")
             // This call to TransactionManager will suspend until the UI provides a result.
             // TransactionManager.requestInputScreen will internally:
             //   - Generate a unique requestId.
@@ -90,7 +90,7 @@ class ExampleDataFetchingState(parentTransaction: BaseTransaction) :
                 config = inputScreenConfig,
                 currentFragment = fragment
             )
-
+            Log.i("ART", "Input screen config: ZZTOP got here")
             var selectedVessel = "N/A"
             // Assuming your StateInputFragment.ResultKeys are accessible or defined in a shared place
             val resultKeys = com.example.artest2.ui.statedialogs.StateInputFragment.ResultKeys

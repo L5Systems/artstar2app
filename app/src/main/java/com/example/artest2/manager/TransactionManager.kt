@@ -16,6 +16,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import android.app.Application
 import android.content.Intent
+import android.os.Bundle
 import android.util.Log
 import androidx.fragment.app.Fragment
 import com.example.artest2.DialogManager
@@ -27,12 +28,36 @@ import com.example.artest2.core.TransStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import java.util.concurrent.ConcurrentHashMap
 
 class TransactionManager(
     private val application: Application,
     private val externalScope: CoroutineScope // Scope from ViewModel or Application
 ) {
-    private val transactionFactory: TransactionFactory = TransactionFactory(application) // Initialize factory
+    companion object {
+        const val CONSTANT_STRING = "This is a compile-time constant" // Compile-time constant
+        private val _uiActions = MutableSharedFlow<UiAction>()
+        val uiActions = _uiActions.asSharedFlow()
+
+        val SOME_PROPERTY = "This is a regular property in a companion object"
+        var mutableProperty = 100
+
+        fun utilityFunction() {
+            println("Utility function called from companion object. Mutable property: $mutableProperty")
+        }
+        suspend fun emitUiAction(action: UiAction) {
+            _uiActions.emit(action)
+        }
+
+    }
+
+    fun instanceMethod() {
+        println("Accessing companion object property from instance: ${TransactionManager.SOME_PROPERTY}")
+    }
+
+
+
+private val transactionFactory: TransactionFactory = TransactionFactory(application) // Initialize factory
     private var transactionPrototypes: MutableMap<String, (Long, String) -> BaseTransaction> =
         mutableMapOf()
 
@@ -47,6 +72,10 @@ class TransactionManager(
 
     private val transactionMutex = Mutex()
     private var currentTransactionJob: Job? = null
+
+    // Assuming you have a map to store the pending requests:
+    private val pendingUiRequests =
+        ConcurrentHashMap<String, CompletableDeferred<Map<String, Any>?>>()
 
     // --- UI Action Emitter (for DashboardFragment/Activity to observe) ---
     // Assuming you have this from previous discussions
@@ -129,7 +158,7 @@ class TransactionManager(
             val initialSelection: String
         ) : UiAction()
         // DialogResult might become less necessary if the callback handles it, or it's used for other scenarios.
-        data class DialogResult(val stateName: String, val data: Map<String, Any>?) : UiAction()
+        data class DialogResult(val stateName: String, val requestId:String, val data: Bundle) : UiAction()
 
         data class UpdateTransactionStatus(val status: TransStatus) : UiAction()
         // Add other UI actions as needed (e.g., NavigateTo, ShowLoading, HideLoading)
@@ -477,8 +506,6 @@ class TransactionManager(
     // In TransactionManager.kt (UiAction definition)
     // In TransactionManager.kt (UiAction definition)
 
-    private val _uiActions = MutableSharedFlow<UiAction>()
-    val uiActions = _uiActions.asSharedFlow()
 
 // In TransactionManager.kt
 
@@ -498,7 +525,7 @@ class TransactionManager(
 
         val finalAction = dialogActionConfig.copy()
 
-        _uiActions.emit(finalAction)
+        emitUiAction(finalAction)
         Log.d("TransactionManager", "Emitted generic ShowDialogActivity for type ${finalAction.dialogType} with requestId $requestId")
         return deferredResult.await()
     }
@@ -554,9 +581,6 @@ class TransactionManager(
     }    // ... rest of TransactionManager code ...
 
     // Function to emit a UI action
-    suspend fun emitUiAction(action: UiAction) {
-        _uiActions.emit(action)
-    }
 
     /**
      * Initializes the states for a given transaction based on its definition.

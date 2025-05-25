@@ -27,7 +27,7 @@ class DashboardViewModel (application: Application) : AndroidViewModel(applicati
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     // EXPOSE UI ACTIONS FROM TRANSACTIONMANAGER
-    val uiActions: Flow<TransactionManager.UiAction> = transactionManager.uiActions // Expose the flow
+    val uiActions: Flow<TransactionManager.UiAction> = TransactionManager.uiActions // Expose the flow
 
 
     // Expose TransactionManager's status flow if needed for UI
@@ -54,6 +54,25 @@ class DashboardViewModel (application: Application) : AndroidViewModel(applicati
     fun setDashboardFragment(frag: Fragment){
 
         transactionManager.setDashboardFragment(frag)
+    }
+    // In DashboardViewModel.kt
+// Assuming your TransactionManager instance is accessible here
+// (e.g., injected or created by the ViewModel)
+
+    fun processStateCompletion(requestId: String, resultData: Map<String, Any>?) {
+        viewModelScope.launch { // Or use the appropriate CoroutineScope
+            Log.d("DashboardViewModel", "Processing state completion for Request ID: $requestId, Data: $resultData")
+            transactionManager.completeUiRequest(requestId, resultData)
+        }
+    }
+
+    // If the UI was cancelled (e.g., back button, or specific cancel button in StateInputFragment
+// that doesn't go through the positive result path but still needs to unblock the state)
+    fun processUiCancellation(requestId: String) {
+        viewModelScope.launch {
+            Log.d("DashboardViewModel", "Processing UI cancellation for Request ID: $requestId")
+            transactionManager.completeUiRequest(requestId,null)
+        }
     }
     fun startSampleTransaction(transactionType: String,vesselName:String,fragment: Fragment) { // Pass context here
         viewModelScope.launch {

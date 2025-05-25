@@ -1,11 +1,17 @@
 
 package com.example.artest2.ui.statedialogs // Assuming same package as StateInputFragment
 
+import android.os.Bundle
+import android.util.Log
+import androidx.activity.result.launch
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.example.artest2.DialogManager
+import com.example.artest2.manager.TransactionManager
+import kotlinx.coroutines.launch
 
 // Argument keys (should match those used in your navigation graph and StateInputFragment)
 object StateInputArgs {
@@ -54,7 +60,7 @@ class StateInputViewModel(
 
     // --- Dialog Type ---
     // Not LiveData as it's unlikely to change after fragment creation for a dialog
-    val dialogType: DialogManager.DialogType?
+    val dialogType: DialogManager.DialogType = DialogManager.DialogType.USER_INPUT_TEXT
 
     // --- Request ID (critical for sending result) ---
     val requestId: String?
@@ -63,7 +69,7 @@ class StateInputViewModel(
     init {
         // Load initial values from SavedStateHandle (navigation arguments)
         requestId = savedStateHandle.get<String>(StateInputArgs.REQUEST_ID)
-        dialogType = savedStateHandle.get<DialogManager.DialogType>(StateInputArgs.DIALOG_TYPE)
+        //dialogType = savedStateHandle.get<DialogManager.DialogType>(StateInputArgs.DIALOG_TYPE)
 
         _title.value = savedStateHandle.get<String>(StateInputArgs.TITLE) ?: "Input Required"
         _message.value = savedStateHandle.get<String>(StateInputArgs.MESSAGE)
@@ -116,6 +122,7 @@ class StateInputViewModel(
     fun isInputValid(): Boolean {
         return when (dialogType) {
             DialogManager.DialogType.USER_INPUT_TEXT -> {
+                return true
                 !currentTextInput.value.isNullOrBlank() // Example: non-empty input
             }
             DialogManager.DialogType.VESSEL_SELECTION -> {
@@ -125,4 +132,17 @@ class StateInputViewModel(
             else -> true // Default to true if no specific validation
         }
     }
+    fun sendResultBack(requestId: String, resultData: Bundle) {
+        viewModelScope.launch { // Or use the appropriate CoroutineScope
+            Log.d("DashboardViewModel", "Processing state completion for Request ID: $requestId, Data: $resultData")
+            var action = TransactionManager.UiAction.DialogResult("ExampleDataFetchingState",  requestId,resultData)
+
+            TransactionManager.emitUiAction(action)
+        }
+    }
+    fun processStateCompletion(requestId: String, resultData: Map<String, Any>?) {
+
+    }
+
+
 }
