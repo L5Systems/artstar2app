@@ -98,8 +98,10 @@ class DashboardViewModel (application: Application) : AndroidViewModel(applicati
                         "Transaction Started.",
                         if (currentTransactionIterator?.hasNext() == true) "Next: ${currentTransactionIterator?.next()?.label ?: "Step"}" else "Finish"
                     )
-                    //currentTransactionIterator = transactionManager.getCurrentTransactionStateNodes().iterator() // Reset iterator for actual steps
-                    proceedToNextStep(fragment)
+                    currentTransactionIterator = transactionManager.getCurrentTransactionStateNodes().iterator()
+                    //for (node in currentTransactionIterator!!) {// Reset iterator for actual steps
+                        proceedToNextStep(fragment)
+                    //}
                 } else {
                     _uiState.value = UiState.Error("Failed to start transaction.")
                     Log.e("MainViewModel", "Failed to create new transaction.")

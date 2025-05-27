@@ -37,6 +37,17 @@ abstract class StateBase(
         stateSpecificData.add(data)
         return true
     }
+    fun retrieveStateOutputData(): Map<String, Any> {
+        var retData = mapOf<String, Any>()
+        val  i = 0;
+        for (data in stateSpecificData) {
+            "Path_"+i to data.path;
+            "ApiData_"+i to data.data;
+            "Action_"+i to data.action;
+            "ApiResult"+i to data.result;
+        }
+        return retData
+    }
 
     // Helper to get the TransactionManager, assuming BaseTransaction holds it
     protected fun getTransactionManager(): com.example.artest2.manager.TransactionManager? {

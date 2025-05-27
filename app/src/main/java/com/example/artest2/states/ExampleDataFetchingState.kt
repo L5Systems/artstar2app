@@ -30,11 +30,12 @@ class ExampleDataFetchingState(parentTransaction: BaseTransaction) :
 
     override suspend fun fetchReturnData(executionResult: Any): Map<String, Any> {
         println("[${getName()}] Preparing return data from: $executionResult")
-        val dataToReturn = executionResult as Map<*, *>
+        val dataToReturn =  retrieveStateOutputData()  // executionResult as Map<*, *>
         val processedData: Map<String, Any> = mapOf(
             "finalUserName" to (dataToReturn["userName"] ?: "defaultUserName"),
             "userAgreed" to (dataToReturn["consentGiven"] ?: false),
             "timestamp" to System.currentTimeMillis()
+
         )
         println("[${getName()}] Data to return: $processedData")
         return processedData
@@ -110,8 +111,10 @@ class ExampleDataFetchingState(parentTransaction: BaseTransaction) :
                 storeStateOutputData(ApiCallData(
                     "vesselSelection",
                     mapOf("vessel" to "SKIPPED"),
-                    action=  "zztop"
+                    action=  "Cancelled",
+                    result = false
                 ))
+
             }
 
             // ... (rest of the logic) ...

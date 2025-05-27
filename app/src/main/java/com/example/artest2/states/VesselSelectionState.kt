@@ -102,19 +102,23 @@ class VesselSelectionState(parentTransaction: BaseTransaction) :
         }
     }
     override suspend fun fetchInputData(context: Map<String, Any>): Map<String, Any> {
-        TODO("Not yet implemented")
+        var inputData = mutableMapOf<String, Any>()
+        inputData["initialValue"] = 100
+        return inputData
     }
 
     override suspend fun fetchReturnData(executionResult: Any): Map<String, Any> {
-        TODO("Not yet implemented")
+        var returnData = mutableMapOf<String, Any>()
+        returnData["returnedValue"] = "Dina Star"
+        return returnData
     }
 
     override suspend fun commit(returnData: Map<String, Any>) {
-        TODO("Not yet implemented")
+        Log.d("VesselSelectionState", "Committing with returnData: $returnData")
     }
 
     override suspend fun rollback(error: Throwable?) {
-        TODO("Not yet implemented")
+        Log.d("VesselSelectionState", "Rolling back with error: ${error?.message}")
     }
 
 

@@ -42,14 +42,16 @@ class DashboardFragment : Fragment() {
     // onDestroyView.
     private val binding get() = _binding!!
     private var selectedTran:String = ""
-    private lateinit var dashboardViewModel: DashboardViewModel
+     //private var dashboardViewModel?: Any = null //DashboardViewModel = DashboardViewModel(requireActivity().application)
+    // Store the active dialog's original TransactionManager callback, keyed by requestId
+    private val activeDialogCallbacks = mutableMapOf<String, (Map<String, Any>?) -> Unit>()
 
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        val dashboardViewModel =
+        var dashboardViewModel =
             ViewModelProvider(this).get(DashboardViewModel::class.java)
 
         _binding = FragmentDashboardBinding.inflate(inflater, container, false)
@@ -64,6 +66,8 @@ class DashboardFragment : Fragment() {
         collectTransactionStatus(dashboardViewModel)
         collectUiActions(dashboardViewModel)
         collectUiState(dashboardViewModel)
+        collectUiEventsFromViewModel()
+
 
         // --- Spinner Setup with Dummy Data ---
 
@@ -86,102 +90,7 @@ class DashboardFragment : Fragment() {
         )
         // In DashboardFragment.kt
 
-        class DashboardFragment : Fragment() { // Implement the new listener
 
-            // ... (ViewModel, binding, etc.)
-            // Store the active dialog's original TransactionManager callback, keyed by requestId
-            private val activeDialogCallbacks = mutableMapOf<String, (Map<String, Any>?) -> Unit>()
-
-
-            private fun collectUiEventsFromViewModel() {
-                viewLifecycleOwner.lifecycleScope.launch {
-                    // Assuming dashboardViewModel.uiActions is where TransactionManager.UiAction.ShowDialogActivity arrives
-                    dashboardViewModel.uiActions.collect { action ->
-                        when (action) {
-                            is TransactionManager.UiAction.ShowDialogActivity -> {
-                                Log.d("DashboardFragment", "Received ShowDialogActivity for ID ${action.requestId}")
-                                // Store the original callback from the TransactionManager
-                                activeDialogCallbacks[action.requestId] = action.onResult
-                                // Show the generic dialog
-                                showStateDrivenDialog(action)
-                            }
-                            // ... other actions
-                            is TransactionManager.UiAction.RequestInputScreen -> TODO()
-                            is TransactionManager.UiAction.ShowMessage -> TODO()
-                            is TransactionManager.UiAction.UpdateTransactionStatus -> TODO()
-                            is TransactionManager.UiAction.DialogResult -> TODO()
-                        }
-                    }
-                }
-            }
-
-            private fun showStateDrivenDialog(dialogAction: TransactionManager.UiAction.ShowDialogActivity) {
-                val dialogFragment = StateInputFragment.newInstance(
-                    dialogAction.requestId,
-                    dialogAction.dialogType,
-                    "testDialog",
-                    "DO This",
-                    "OK",
-                    "CANCEL",
-                    positiveButton = "XX",
-                    negativeButton = "NO"
-                )
-                dialogFragment.setDialogListener(this) // DashboardFragment is the StateDialogListener
-                dialogFragment.show(childFragmentManager, StateInputFragment.TAG + "_" + dialogAction.requestId) // Unique tag
-            }
-
-            // --- Implementation of StateDialogFragment.StateDialogListener ---
-            fun onDialogDismissed(requestId: String, results: Map<String, Any>?) {
-                Log.d("DashboardFragment", "StateDialog dismissed for requestId: $requestId, Results: $results")
-
-                // Retrieve the original callback for this request
-                val originalCallback = activeDialogCallbacks.remove(requestId)
-
-                if (originalCallback == null) {
-                    Log.w("DashboardFragment", "No callback found for dialog requestId: $requestId")
-                    return
-                }
-
-                // Process the generic results into what the TransactionManager/State expects
-                // This is where you map from the generic dialog output to the specific needs
-                // of the state that requested the dialog.
-                var processedResultForState: Map<String, Any>? = null
-
-                if (results != null) {
-                    if (results[StateInputFragment.ResultKeys.POSITIVE_CLICK] == true) {
-                        val outputMap = mutableMapOf<String, Any>()
-                        results[StateInputFragment.ResultKeys.USER_TEXT_INPUT]?.let { outputMap["userInput"] = it }
-                        results[StateInputFragment.ResultKeys.SELECTED_ITEM]?.let { outputMap["selectedVessel"] = it } // Example specific mapping
-                        // Add more mappings based on dialogType or customData if needed
-
-                        if (outputMap.isEmpty() && results.containsKey(StateInputFragment.ResultKeys.POSITIVE_CLICK)) {
-                            // If it's just a confirmation dialog, positive click might be enough
-                            processedResultForState = mapOf("confirmed" to true)
-                        } else if (outputMap.isNotEmpty()){
-                            processedResultForState = outputMap
-                        } else {
-                            // Positive click but no specific data captured relevant to this state type
-                            // This logic depends on how your states interpret an "empty" positive result
-                            Log.d("DashboardFragment", "Positive click but no specific data for TM, requestId: $requestId")
-                            processedResultForState = mapOf("confirmed_empty" to true) // Or null, depending on state needs
-                        }
-
-                    } else if (results[StateInputFragment.ResultKeys.NEGATIVE_CLICK] == true || results["cancelled"] == true) {
-                        Log.d("DashboardFragment", "Dialog cancelled or negative for requestId: $requestId")
-                        processedResultForState = null // Typically null for cancellation/negative
-                    }
-                    // Handle neutral click if necessary
-                } else {
-                    // Dialog dismissed without explicit button press (e.g. back button, touch outside)
-                    // Usually treated as cancellation
-                    Log.d("DashboardFragment", "Dialog dismissed without action for requestId: $requestId")
-                    processedResultForState = null
-                }
-
-                originalCallback.invoke(processedResultForState)
-            }
-            // ...
-        }
         binding.spinnerVessel.adapter = vesselAdapter
 
         binding.spinnerVessel.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
@@ -421,7 +330,30 @@ class DashboardFragment : Fragment() {
             viewModel.processFragmentCancellation(action.requestId)
         }
     }
-
+    private fun collectUiEventsFromViewModel() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            // Assuming dashboardViewModel.uiActions is where TransactionManager.UiAction.ShowDialogActivity arrives
+            TransactionManager.uiActions.collect { action ->
+                when (action) {
+                    is TransactionManager.UiAction.ShowDialogActivity -> {
+                        Log.d("DashboardFragment", "Received ShowDialogActivity for ID ${action.requestId}")
+                        // Store the original callback from the TransactionManager
+                        activeDialogCallbacks[action.requestId] = action.onResult
+                        // Show the generic dialog
+                        //showStateDrivenDialog(action)
+                    }
+                    // ... other actions
+                    is TransactionManager.UiAction.RequestInputScreen->
+                    {
+                        Log.d("DashboardFragment","Received RequestInputScreen for ID ${action.requestId}")
+                    }
+                    is TransactionManager.UiAction.ShowMessage -> {Log.d("DashboardFragment","ShowMessage")}
+                    is TransactionManager.UiAction.UpdateTransactionStatus -> {Log.d("DashboardFragment","UpdateTransactionStatus}")}
+                    is TransactionManager.UiAction.DialogResult -> {Log.d("DashboardFragment","DialogResult ${action.requestId}")}
+                }
+            }
+        }
+    }
     // NEW FUNCTION TO COLLECT UI STATE
     private fun collectUiState(dashboardView: DashboardViewModel) {
         lifecycleScope.launch {
@@ -479,6 +411,11 @@ private fun DashboardViewModel.processFragmentResult(
 ) {
 }
 
-private fun DashboardViewModel.processFragmentCancellation(requestId: String) {}
+private fun DashboardViewModel.processFragmentCancellation(requestId: String) {
 
-private fun StateInputFragment.setDialogListener(fragment: Fragment) {}
+}
+
+private fun StateInputFragment.setDialogListener(fragment: Fragment) {
+
+
+}
